@@ -16,11 +16,14 @@ const cookieParser = require('cookie-parser');
 const axios = require('axios');
 
 const AppDataSource = require('./data-source'); // Import TypeORM Data Source
+const startRetentionJob = require('./scripts/retentionJob');
 
 const app = express();
 const port = process.env.PORT || 5000;
 
-app.use(cors({ origin: 'http://localhost:5173', credentials: true }));
+// Allow configuring client URL via environment variable for deployments
+const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+app.use(cors({ origin: clientUrl, credentials: true }));
 app.use(express.json());
 app.use(cookieParser());
 
@@ -30,13 +33,17 @@ async function initializeTypeORM() {
     await AppDataSource.initialize();
     console.log('TypeORM Data Source initialized.');
     await AppDataSource.runMigrations();
-    console.log('TypeORM migrations executed successfully.');
+    console.log('TypeORM migrations ran successfully.');
 
     // Ensure required columns exist (safe for development)
     try {
       await AppDataSource.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS username VARCHAR(100) UNIQUE`);
       await AppDataSource.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS refresh_token TEXT`);
       await AppDataSource.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS project_id INTEGER`);
+      await AppDataSource.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS estimated_minutes INTEGER`);
+      await AppDataSource.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS actual_minutes INTEGER`);
+      await AppDataSource.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS substituted_minutes INTEGER`);
+      await AppDataSource.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS actual_started_at TIMESTAMP`);
       console.log('Ensured optional columns exist.');
     } catch (err) {
       console.warn('Error ensuring optional columns:', err.message);
@@ -119,7 +126,24 @@ app.get('/', (req, res) => {
 
 // Start server after TypeORM initialization and migrations
 initializeTypeORM().then(() => {
-  app.listen(port, () => {
+  const server = app.listen(port, () => {
     console.log(`Server running on port ${port}`);
   });
+
+  // Start retention job if configured
+  try {
+    const enableRetention = process.env.ENABLE_RETENTION_JOB === 'true';
+    if (enableRetention) {
+      const schedule = process.env.RETENTION_SCHEDULE || '0 3 * * *';
+      const days = process.env.RETENTION_DAYS ? parseInt(process.env.RETENTION_DAYS, 10) : 90;
+      // Use configured server URL for retention job if provided, else default to localhost
+      const serverUrl = process.env.SERVER_URL || `http://localhost:${port}`;
+      startRetentionJob(serverUrl, { schedule, days });
+      console.log('Retention job scheduled:', schedule, 'days:', days);
+    }
+  } catch (err) {
+    console.warn('Failed to start retention job:', err.message || err);
+  }
+
+  return server;
 });

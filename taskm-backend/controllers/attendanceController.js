@@ -212,7 +212,31 @@ exports.createLeave = async (req, res) => {
 exports.getHolidays = async (req, res) => {
   try {
     const holidayRepo = AppDataSource.getRepository(Holiday);
-    const holidays = await holidayRepo.find({ order: { date: 'ASC' } });
+    let holidays = await holidayRepo.find({ order: { date: 'ASC' } });
+
+    // If no holidays exist, seed a minimal set for this year so the calendar shows them
+    if (!holidays || holidays.length === 0) {
+      const year = new Date().getFullYear();
+      const defaults = [
+        { date: `${year}-01-26`, name: 'Republic Day', type: 'national' },
+        { date: `${year}-08-15`, name: 'Independence Day', type: 'national' },
+        { date: `${year}-10-02`, name: 'Gandhi Jayanti', type: 'national' },
+        { date: `${year}-12-25`, name: 'Christmas', type: 'national' },
+      ];
+      try {
+        for (const h of defaults) {
+          const exists = await holidayRepo.findOneBy({ date: h.date });
+          if (!exists) {
+            const rec = holidayRepo.create(h);
+            await holidayRepo.save(rec);
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to seed default holidays:', e && e.message ? e.message : e);
+      }
+      holidays = await holidayRepo.find({ order: { date: 'ASC' } });
+    }
+
     // format date to YYYY-MM-DD string to avoid timezone issues
     const formatted = holidays.map(h => ({ id: h.id, date: h.date instanceof Date ? h.date.toISOString().split('T')[0] : h.date, name: h.name, type: h.type }));
     res.json(formatted);

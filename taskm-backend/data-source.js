@@ -14,15 +14,25 @@ const ProjectMemberSchema = require('./entities/ProjectMember');
 
 const AppDataSource = new DataSource({
   type: 'postgres',
-  host: process.env.PGHOST,
-  port: process.env.PGPORT ? parseInt(process.env.PGPORT, 10) : 5432,
-  username: process.env.PGUSER,
-  password: process.env.PGPASSWORD,
-  database: process.env.PGDATABASE,
-  synchronize: true, // temporarily enable for development to create new tables (switch to false and use migrations later)
-  logging: false,
-  entities: [UserSchema, TaskSchema, AttendanceSchema, LeaveSchema, HolidaySchema, ProjectSchema, ProjectMemberSchema, WFHSchema, NotificationSchema],
-  migrations: [path.join(__dirname, 'migrations/**/*.js')], // Absolute path to migration files
+  host: process.env.PGHOST || 'localhost',
+  port: process.env.PGPORT ? parseInt(process.env.PGPORT, 10) : 5433,
+  username: process.env.PGUSER || 'postgres',
+  password: process.env.PGPASSWORD || 'postgres',
+  database: process.env.PGDATABASE || 'postgres',
+  synchronize: false, // safer for migrations
+  logging: process.env.NODE_ENV === 'development',
+  entities: [
+    UserSchema,
+    TaskSchema,
+    AttendanceSchema,
+    LeaveSchema,
+    HolidaySchema,
+    ProjectSchema,
+    ProjectMemberSchema,
+    WFHSchema,
+    NotificationSchema
+  ],
+  migrations: [path.join(__dirname, 'migrations/*.{ts,js}')],
   subscribers: [],
 });
 

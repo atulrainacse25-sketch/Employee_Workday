@@ -12,9 +12,11 @@ import { Dashboard } from './components/dashboard/Dashboard';
 import { Reports } from './components/dashboard/Reports';
 import Projects from './components/projects/Projects';
 import { TaskList } from './components/tasks/TaskList';
+import TaskDetails from './components/tasks/TaskDetails.tsx';
 import { Attendance } from './components/attendance/Attendance';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import Settings from './components/settings/Settings';
+import SmartPlanner from './pages/SmartPlanner.jsx';
 
 function App() {
   return (
@@ -41,6 +43,7 @@ function App() {
                 <Route index element={<Navigate to="/dashboard" replace />} />
                 <Route path="dashboard" element={<Dashboard />} />
                 <Route path="tasks" element={<TaskList />} />
+                <Route path="tasks/:id" element={<TaskDetails />} />
                 <Route path="attendance" element={<Attendance />} />
                 <Route path="projects" element={<Projects />} />
                 <Route path="calendar" element={<div className="p-6 text-center text-gray-600">Calendar module coming soon...</div>} />
@@ -49,9 +52,9 @@ function App() {
                     <Reports />
                   </ProtectedRoute>
                 } />
-                <Route path="team" element={
+                <Route path="smart-planner" element={
                   <ProtectedRoute adminOnly>
-                    <div className="p-6 text-center text-gray-600">Team management coming soon...</div>
+                    <SmartPlanner />
                   </ProtectedRoute>
                 } />
                 

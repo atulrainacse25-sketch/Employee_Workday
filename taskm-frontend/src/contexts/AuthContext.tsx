@@ -15,12 +15,14 @@ interface AuthState {
   loading: boolean;
   initialized: boolean;
   error: string | null;
+  registrationSuccess: boolean;
 }
 
 type AuthAction =
   | { type: 'AUTH_START' }
   | { type: 'AUTH_SUCCESS'; payload: { user: User; token: string } }
   | { type: 'AUTH_ERROR'; payload: string }
+  | { type: 'REGISTER_SUCCESS' }
   | { type: 'LOGOUT' }
   | { type: 'CLEAR_ERROR' };
 
@@ -35,7 +37,7 @@ export const AuthContext = createContext<{
 const authReducer = (state: AuthState, action: AuthAction): AuthState => {
   switch (action.type) {
     case 'AUTH_START':
-      return { ...state, loading: true, error: null };
+      return { ...state, loading: true, error: null, registrationSuccess: false };
     case 'AUTH_SUCCESS':
       return {
         ...state,
@@ -44,13 +46,16 @@ const authReducer = (state: AuthState, action: AuthAction): AuthState => {
         user: action.payload.user,
         token: action.payload.token,
         error: null,
+        registrationSuccess: false,
       };
     case 'AUTH_ERROR':
-      return { ...state, loading: false, error: action.payload };
+      return { ...state, loading: false, error: action.payload, registrationSuccess: false };
+    case 'REGISTER_SUCCESS':
+      return { ...state, loading: false, registrationSuccess: true, error: null };
     case 'LOGOUT':
-      return { ...state, user: null, token: null, error: null, initialized: true };
+      return { ...state, user: null, token: null, error: null, initialized: true, registrationSuccess: false };
     case 'CLEAR_ERROR':
-      return { ...state, error: null };
+      return { ...state, error: null, registrationSuccess: false };
     default:
       return state;
   }
@@ -63,6 +68,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     loading: false,
     initialized: false,
     error: null,
+    registrationSuccess: false,
   });
 
   useEffect(() => {
@@ -76,35 +82,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const resInterceptor = axios.interceptors.response.use(
       (response) => response,
       async (error) => {
-        const originalRequest = error.config;
-        if (error.response && error.response.status === 401 && !originalRequest._retry) {
-          originalRequest._retry = true;
-          try {
-            const refreshRes = await axios.post('/api/refresh', {}, { withCredentials: true, timeout: 5000 }); // refresh token is read from cookie by backend
-            const newToken = refreshRes.data.token;
-            localStorage.setItem('token', newToken);
-            axios.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
-            originalRequest.headers['Authorization'] = `Bearer ${newToken}`;
-            return axios(originalRequest);
-          } catch (refreshErr) {
-            // Try body refresh using stored refresh token (dev fallback)
-            const storedRefresh = localStorage.getItem('refreshToken');
-            if (storedRefresh) {
-              try {
-                const r2 = await axios.post('/api/refresh', { token: storedRefresh }, { withCredentials: true, timeout: 5000 });
-                const t2 = r2.data.token;
-                if (t2) {
-                  localStorage.setItem('token', t2);
-                  axios.defaults.headers.common['Authorization'] = `Bearer ${t2}`;
-                  originalRequest.headers['Authorization'] = `Bearer ${t2}`;
-                  return axios(originalRequest);
-                }
-              } catch (e) {
-                console.debug('Interceptor fallback refresh failed:', e);
-              }
-            }
+        const originalRequest = error.config as any;
+        if (error.response && error.response.status === 401) {
+          // Do not try to refresh when the refresh call itself fails
+          if (originalRequest?.url && String(originalRequest.url).includes('/api/refresh')) {
             dispatch({ type: 'LOGOUT' });
-            return Promise.reject(refreshErr);
+            return Promise.reject(error);
+          }
+          if (!originalRequest._retry) {
+            originalRequest._retry = true;
+            try {
+              const refreshRes = await axios.post('/api/refresh', {}, { withCredentials: true, timeout: 5000 }); // refresh token is read from cookie by backend
+              const newToken = refreshRes.data.token;
+              localStorage.setItem('token', newToken);
+              axios.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
+              originalRequest.headers['Authorization'] = `Bearer ${newToken}`;
+              return axios(originalRequest);
+            } catch (refreshErr) {
+              // Try body refresh using stored refresh token (dev fallback)
+              const storedRefresh = localStorage.getItem('refreshToken');
+              if (storedRefresh) {
+                try {
+                  const r2 = await axios.post('/api/refresh', { token: storedRefresh }, { withCredentials: true, timeout: 5000 });
+                  const t2 = r2.data.token;
+                  if (t2) {
+                    localStorage.setItem('token', t2);
+                    axios.defaults.headers.common['Authorization'] = `Bearer ${t2}`;
+                    originalRequest.headers['Authorization'] = `Bearer ${t2}`;
+                    return axios(originalRequest);
+                  }
+                } catch (e) {
+                  console.debug('Interceptor fallback refresh failed:', e);
+                }
+              }
+              dispatch({ type: 'LOGOUT' });
+              return Promise.reject(refreshErr);
+            }
           }
         }
         return Promise.reject(error);
@@ -178,9 +191,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     dispatch({ type: 'AUTH_START' });
     try {
       const res = await axios.post('/api/login', { identifier, password }, { withCredentials: true });
-      const { token, user } = res.data;
+      const { token, user, refreshToken } = res.data;
       localStorage.setItem('token', token);
-      if (res.data.refreshToken) localStorage.setItem('refreshToken', res.data.refreshToken);
+      if (refreshToken) {
+        localStorage.setItem('refreshToken', refreshToken);
+        try { console.log('Refresh token:', refreshToken); } catch {}
+      }
       dispatch({ type: 'AUTH_SUCCESS', payload: { user, token } });
       // fetch notifications after login
       try {
@@ -214,11 +230,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const register = async (name: string, username: string | undefined, email: string, password: string): Promise<void> => {
     dispatch({ type: 'AUTH_START' });
     try {
-      await axios.post('/api/register', { name, username, email, password }, { withCredentials: true });
-      // Optionally, auto-login after registration
-      const res = await axios.post('/api/login', { identifier: email, password }, { withCredentials: true });
-      if (res.data.refreshToken) localStorage.setItem('refreshToken', res.data.refreshToken);
-      await login(email, password);
+      const res = await axios.post('/api/register', { name, username, email, password }, { withCredentials: true });
+      const rt = (res && res.data) ? (res.data as any).refreshToken : undefined;
+      if (rt) {
+        localStorage.setItem('refreshToken', rt);
+        try { console.log('Refresh token:', rt); } catch {}
+      }
+      // Registration successful - show success state
+      dispatch({ type: 'REGISTER_SUCCESS' });
     } catch (error) {
       if (axios.isAxiosError(error)) {
         dispatch({ type: 'AUTH_ERROR', payload: error.response?.data?.message || 'Registration failed' });

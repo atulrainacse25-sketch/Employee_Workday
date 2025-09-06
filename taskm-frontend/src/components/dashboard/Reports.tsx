@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import axios from 'axios';
 import { useAuth } from '../../contexts/useAuth';
+import { useNavigate } from 'react-router-dom';
 type StatusCount = { status: string; count: number };
 type AssigneeCount = { name: string; count: number };
 type AttendanceCount = { status: string; count: number };
@@ -84,6 +85,46 @@ export const Reports: React.FC = () => {
     if (authState.user.role !== 'admin') return;
     fetchReports();
   }, [authState]);
+
+  // Fetch AI logs for admin panel
+  const [aiLogs, setAiLogs] = useState<any[]>([]);
+  const [aiPage, setAiPage] = useState(1);
+  const [aiPageSize] = useState(20);
+  const [aiTotal, setAiTotal] = useState(0);
+  const [aiAction, setAiAction] = useState('');
+  const [searchText, setSearchText] = useState('');
+  const [aiQuery, setAiQuery] = useState('');
+  const navigate = useNavigate();
+  const searchDebounceRef = useRef<number | null>(null);
+  const [showAdminControls, setShowAdminControls] = useState(false);
+  // Fetch AI logs helper (used by effect and actions)
+  const fetchAiLogs = async () => {
+    try {
+      const params: any = { page: aiPage, pageSize: aiPageSize };
+      if (aiAction) params.action = aiAction;
+      if (aiQuery) params.q = aiQuery;
+      const res = await axios.get('/api/notifications/ai/logs', { params, withCredentials: true });
+      if (res.status === 200) {
+        setAiLogs(res.data.logs || []);
+        setAiTotal(res.data.total || 0);
+      }
+    } catch (err) {
+      // ignore
+    }
+  };
+  useEffect(() => {
+    if (authState.user && authState.user.role === 'admin') fetchAiLogs();
+  }, [authState.user, aiPage, aiAction, aiQuery]);
+
+  // debounce searchText -> aiQuery
+  useEffect(() => {
+    if (searchDebounceRef.current) window.clearTimeout(searchDebounceRef.current as any);
+    searchDebounceRef.current = window.setTimeout(() => {
+      setAiQuery(searchText);
+      setAiPage(1);
+    }, 500);
+    return () => { if (searchDebounceRef.current) window.clearTimeout(searchDebounceRef.current as any); };
+  }, [searchText]);
 
   return (
     <div className="space-y-6">
@@ -222,6 +263,89 @@ export const Reports: React.FC = () => {
               ))}
             </tbody>
           </table>
+        </div>
+      </div>
+      <div className="bg-white p-6 rounded-xl shadow mt-6 border border-slate-100">
+        <h3 className="font-semibold mb-4 text-lg text-slate-700">AI Logs (admin)</h3>
+        <div className={showAdminControls ? 'block' : 'hidden'} aria-hidden={!showAdminControls}>
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-slate-600">Action</label>
+            <select value={aiAction} onChange={(e) => { setAiAction(e.target.value); setAiPage(1); }} className="border rounded px-2 py-1">
+              <option value="">All</option>
+              <option value="chat">chat</option>
+              <option value="analyze">analyze</option>
+              <option value="plan">plan</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <input value={searchText} onChange={(e) => setSearchText(e.target.value)} placeholder="Search prompts/responses" className="border rounded px-2 py-1" />
+            <button onClick={() => { setAiQuery(searchText); setAiPage(1); }} className="px-3 py-1 border rounded">Search</button>
+            <button onClick={() => { setSearchText(''); setAiQuery(''); setAiAction(''); setAiPage(1); }} className="px-3 py-1 border rounded">Clear</button>
+          </div>
+        </div>
+        <div className="mb-3">
+          <button onClick={() => setShowAdminControls(s => !s)} className="px-3 py-1 border rounded text-sm">{showAdminControls ? 'Hide admin controls' : 'Show admin controls'}</button>
+        </div>
+
+        <div className="max-h-56 overflow-y-auto">
+          {aiLogs.length === 0 && <div className="text-sm text-gray-500">No AI logs or insufficient permissions.</div>}
+          {aiLogs.map((l: any) => (
+            <div key={l.id} className="border-b py-2 flex items-start justify-between gap-4">
+              <div>
+                <div className="text-sm font-medium">{l.action} — {new Date(l.created_at).toLocaleString()}</div>
+                <div className="text-xs text-gray-600">Prompt: {l.prompt}</div>
+              </div>
+              <div className="flex-shrink-0 flex items-center gap-2">
+                <button onClick={async () => {
+                  try {
+                    const r = await axios.get(`/api/notifications/ai/logs/${l.id}`, { withCredentials: true });
+                    const data = r.data;
+                    // navigate in-app to Smart Planner and pass data via state
+                    navigate('/smart-planner', { state: { replay: data } });
+                  } catch (err) {
+                    console.warn('Failed to load log');
+                  }
+                }} className="text-sm px-3 py-1 border rounded">Replay</button>
+
+                <div className="hidden" aria-hidden="true">
+                  <button onClick={async () => {
+                    try {
+                      await axios.post(`/api/notifications/ai/logs/${l.id}/archive`, {}, { withCredentials: true });
+                      await fetchAiLogs();
+                    } catch (err) {
+                      console.warn('Archive failed');
+                    }
+                  }} className="text-sm px-3 py-1 border rounded">Archive</button>
+
+                  <button onClick={async () => {
+                    try {
+                      await axios.post(`/api/notifications/ai/logs/${l.id}/unarchive`, {}, { withCredentials: true });
+                      await fetchAiLogs();
+                    } catch (err) {
+                      console.warn('Unarchive failed');
+                    }
+                  }} className="text-sm px-3 py-1 border rounded">Unarchive</button>
+
+                  <button onClick={async () => {
+                    try {
+                      await axios.delete(`/api/notifications/ai/logs/${l.id}`, { withCredentials: true });
+                      await fetchAiLogs();
+                    } catch (err) {
+                      console.warn('Delete failed');
+                    }
+                  }} className="text-sm px-3 py-1 border rounded">Delete</button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="mt-3 flex items-center justify-between">
+          <div className="text-sm text-gray-600">Total: {aiTotal}</div>
+          <div className="space-x-2">
+            <button disabled={aiPage <= 1} onClick={() => setAiPage(p => Math.max(1, p-1))} className="px-2 py-1 border rounded">Prev</button>
+            <button disabled={(aiPage * aiPageSize) >= aiTotal} onClick={() => setAiPage(p => p+1)} className="px-2 py-1 border rounded">Next</button>
+          </div>
         </div>
       </div>
     </div>

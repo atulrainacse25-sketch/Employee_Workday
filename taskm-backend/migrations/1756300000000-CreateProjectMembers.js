@@ -14,17 +14,29 @@ module.exports = class CreateProjectMembers1756300000000 {
         CONSTRAINT uq_project_user UNIQUE (project_id, user_id)
       );
     `);
-    // optional foreign keys (if projects/users exist)
-    try {
-      await queryRunner.query(`ALTER TABLE project_members ADD CONSTRAINT fk_pm_project FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE`);
-    } catch (e) {
-      // ignore if constraint exists or projects table missing
-    }
-    try {
-      await queryRunner.query(`ALTER TABLE project_members ADD CONSTRAINT fk_pm_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE`);
-    } catch (e) {
-      // ignore
-    }
+    // Add FKs safely: only if referenced tables exist and constraint not present
+    await queryRunner.query(`
+      DO $$
+      BEGIN
+        IF to_regclass('public.projects') IS NOT NULL AND NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'fk_pm_project'
+        ) THEN
+          ALTER TABLE project_members
+          ADD CONSTRAINT fk_pm_project FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
+        END IF;
+      END $$;
+    `);
+    await queryRunner.query(`
+      DO $$
+      BEGIN
+        IF to_regclass('public.users') IS NOT NULL AND NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'fk_pm_user'
+        ) THEN
+          ALTER TABLE project_members
+          ADD CONSTRAINT fk_pm_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+        END IF;
+      END $$;
+    `);
   }
 
   async down(queryRunner) {

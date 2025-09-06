@@ -50,6 +50,26 @@ const TaskSchema = new EntitySchema({
       length: 255,
       nullable: true,
     },
+    estimatedMinutes: {
+      name: 'estimated_minutes',
+      type: 'int',
+      nullable: true,
+    },
+    substitutedMinutes: {
+      name: 'substituted_minutes',
+      type: 'int',
+      nullable: true,
+    },
+    actualMinutes: {
+      name: 'actual_minutes',
+      type: 'int',
+      nullable: true,
+    },
+    actualStartedAt: {
+      name: 'actual_started_at',
+      type: 'timestamp',
+      nullable: true,
+    },
     projectId: {
       name: 'project_id',
       type: 'int',

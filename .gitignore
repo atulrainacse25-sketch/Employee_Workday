@@ -1,0 +1,47 @@
+# Repository-level gitignore for the Task-Manager_Project
+
+# Node.js
+node_modules/
+**/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build outputs
+dist/
+build/
+out/
+
+# Vite
+.vite/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDEs
+.vscode/
+.idea/
+
+# Environment files
+.env
+.env.*
+
+# Gradle and Android build caches (long path issues on Windows)
+.gradle/
+**/.gradle/
+
+# Databases
+*.sqlite
+**/*.sqlite
+taskm-backend/database.sqlite
+
+# Logs
+logs/
+*.log
+
+# Misc
+.cache/
+coverage/
+
+

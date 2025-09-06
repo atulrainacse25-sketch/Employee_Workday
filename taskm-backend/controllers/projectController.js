@@ -97,7 +97,7 @@ exports.inviteMember = async (req, res) => {
     // create notification
     const notifRepo = AppDataSource.getRepository(Notification);
     const message = `You have been invited to project ${projectId}`;
-    const n = notifRepo.create({ userId, message });
+    const n = notifRepo.create({ userId, message, data: JSON.stringify({ type: 'project_invite', projectId }) });
     await notifRepo.save(n);
     res.json(rec);
   } catch (err) {
@@ -118,7 +118,7 @@ exports.addMember = async (req, res) => {
     try {
       const notifRepo = AppDataSource.getRepository(Notification);
       const message = `You have been added to project ${projectId}`;
-      const n = notifRepo.create({ userId, message });
+      const n = notifRepo.create({ userId, message, data: JSON.stringify({ type: 'project_added', projectId }) });
       await notifRepo.save(n);
     } catch (e) { console.error('notify addMember failed', e); }
     res.json(rec);
@@ -145,7 +145,7 @@ exports.acceptInvite = async (req, res) => {
         const ownerId = proj[0].owner_id;
         const notifRepo = AppDataSource.getRepository(Notification);
         const message = `User ${req.user.name} accepted invite to project ${newRec.project_id}`;
-        const n = notifRepo.create({ userId: ownerId, message });
+        const n = notifRepo.create({ userId: ownerId, message, data: JSON.stringify({ type: 'project_activity', projectId: newRec.project_id, action: 'invite_accepted' }) });
         await notifRepo.save(n);
       }
     } catch (e) {

@@ -16,7 +16,7 @@ export const Register: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const { state, register: registerUser } = useAuth();
-  const { register, handleSubmit, watch, formState: { errors } } = useForm<RegisterForm>();
+  const { register, handleSubmit, watch, formState: { errors }, reset } = useForm<RegisterForm>();
 
   if (state.user) {
     return <Navigate to="/dashboard" replace />;
@@ -25,6 +25,13 @@ export const Register: React.FC = () => {
   const onSubmit = async (data: RegisterForm) => {
     await registerUser(data.name, data.username, data.email, data.password);
   };
+
+  // Handle registration success
+  React.useEffect(() => {
+    if (state.registrationSuccess) {
+      reset(); // Clear the form
+    }
+  }, [state.registrationSuccess, reset]);
 
   const password = watch('password');
 
@@ -176,6 +183,39 @@ export const Register: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Registration Success Popup */}
+      {state.registrationSuccess && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full transform transition-all">
+            <div className="text-center">
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mb-4">
+                <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <h2 className="text-2xl font-bold text-gray-900 mb-2">Registration Successful!</h2>
+              <p className="text-gray-600 mb-6">
+                Your account has been created successfully. You can now sign in with your credentials.
+              </p>
+              <div className="space-y-3">
+                <Link
+                  to="/login"
+                  className="w-full bg-green-600 hover:bg-green-700 text-white py-3 px-4 rounded-lg font-semibold transition-all transform hover:scale-[1.02] inline-block"
+                >
+                  Go to Login
+                </Link>
+                <button
+                  onClick={() => window.location.reload()}
+                  className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 py-3 px-4 rounded-lg font-semibold transition-all transform hover:scale-[1.02]"
+                >
+                  Register Another Account
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

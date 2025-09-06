@@ -23,7 +23,7 @@ const navItems: NavItem[] = [
   { name: 'Tasks', href: '/tasks', icon: CheckSquare },
   { name: 'Attendance', href: '/attendance', icon: Clock },
   { name: 'Reports', href: '/reports', icon: BarChart3, adminOnly: true },
-  { name: 'Team', href: '/team', icon: Users, adminOnly: true },
+  { name: 'Smart Planner', href: '/smart-planner', icon: Users, adminOnly: true },
   { name: 'Projects', href: '/projects', icon: FileText },
   { name: 'Settings', href: '/settings', icon: Settings },
 ];

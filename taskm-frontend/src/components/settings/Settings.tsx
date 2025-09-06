@@ -213,6 +213,51 @@ export default function Settings(): JSX.Element {
                 <div className="mt-6">
                   <button onClick={saveIntegrations} className="px-4 py-2 bg-blue-600 text-white rounded">Save Changes</button>
                 </div>
+
+                {/* Admin-only server env form (safe: only visible to admins) */}
+                {isAdmin && (
+                  <div className="mt-8 p-4 border rounded bg-gray-50">
+                    <h4 className="font-semibold mb-3">Server AI & Retention Settings (admin)</h4>
+                    <div className="grid grid-cols-12 gap-3 items-center">
+                      <label className="col-span-3 text-sm text-slate-700">OpenAI API Key</label>
+                      <div className="col-span-9"><input value={/* avoid keeping key in state after save */ ''} placeholder="sk_..." id="openaiKey" type="password" className="w-full px-3 py-2 border rounded" /></div>
+                    </div>
+                    <div className="grid grid-cols-12 gap-3 items-center mt-3">
+                      <label className="col-span-3 text-sm text-slate-700">OpenAI Model</label>
+                      <div className="col-span-9"><input id="openaiModel" defaultValue={process.env.REACT_APP_OPENAI_MODEL || 'gpt-3.5-turbo'} className="w-full px-3 py-2 border rounded" /></div>
+                    </div>
+                    <div className="grid grid-cols-12 gap-3 items-center mt-3">
+                      <label className="col-span-3 text-sm text-slate-700">Enable Retention Job</label>
+                      <div className="col-span-9"><select id="enableRetention" className="w-full px-3 py-2 border rounded"><option value="true">true</option><option value="false">false</option></select></div>
+                    </div>
+                    <div className="grid grid-cols-12 gap-3 items-center mt-3">
+                      <label className="col-span-3 text-sm text-slate-700">Retention Days</label>
+                      <div className="col-span-9"><input id="retentionDays" defaultValue="90" className="w-full px-3 py-2 border rounded" /></div>
+                    </div>
+                    <div className="mt-4 flex gap-2">
+                      <button onClick={async () => {
+                        const openaiKey = (document.getElementById('openaiKey') as HTMLInputElement).value;
+                        const openaiModel = (document.getElementById('openaiModel') as HTMLInputElement).value;
+                        const enableRetention = (document.getElementById('enableRetention') as HTMLSelectElement).value;
+                        const retentionDays = (document.getElementById('retentionDays') as HTMLInputElement).value;
+                        try {
+                          const payload: any = {};
+                          if (openaiKey) payload.OPENAI_API_KEY = openaiKey;
+                          if (openaiModel) payload.OPENAI_MODEL = openaiModel;
+                          payload.ENABLE_RETENTION_JOB = enableRetention;
+                          payload.RETENTION_DAYS = retentionDays;
+                          await axios.post('/api/settings/server/env', payload, { withCredentials: true });
+                          alert('Server env updated (saved to .env on server).');
+                        } catch (err) {
+                          console.error(err);
+                          alert('Failed to update server env');
+                        }
+                      }} className="px-4 py-2 bg-emerald-600 text-white rounded">Save Server Settings</button>
+                      <button onClick={() => { (document.getElementById('openaiKey') as HTMLInputElement).value = ''; }} className="px-4 py-2 border rounded">Clear Key</button>
+                    </div>
+                    <div className="text-xs text-gray-500 mt-2">Note: API keys are stored server-side in <code>.env</code>. Restart may be required for immediate effect.</div>
+                  </div>
+                )}
               </div>
             )}
 

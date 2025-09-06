@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useTasks } from '../../contexts/useTasks';
 import { useAuth } from '../../contexts/useAuth';
 import { TaskCard } from './TaskCard';
@@ -6,37 +6,52 @@ import { TaskModal } from './TaskModal';
 import { TaskFilters } from './TaskFilters';
 import { DndContext, DragEndEvent, closestCenter } from '@dnd-kit/core';
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
-import { Plus, Search, Filter } from 'lucide-react';
+import { Plus, Filter } from 'lucide-react';
 import { Task } from '../../contexts/TaskContext';
+import { useNavigate } from 'react-router-dom';
 
 export const TaskList: React.FC = () => {
   const { state, reorderTasks } = useTasks();
   const { state: authState } = useAuth();
+  const navigate = useNavigate();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
   const [assigneeFilter, setAssigneeFilter] = useState<string>('all');
   const [showFilters, setShowFilters] = useState(false);
+  const [activeTab, setActiveTab] = useState<'todo' | 'in-progress' | 'completed'>('todo');
+
+  // If URL has ?edit=id, open edit modal for that task (used from details page)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const editId = params.get('edit');
+    if (editId) {
+      const t = state.tasks.find(tt => String(tt.id) === editId);
+      if (t) {
+        setEditingTask(t);
+        setIsModalOpen(true);
+        params.delete('edit');
+        window.history.replaceState({}, '', `${window.location.pathname}`);
+      }
+    }
+  }, [state.tasks]);
 
   // Build list of assignees for admin filter (populated inline in JSX)
 
   // Filter tasks based on search and filters
   const filteredTasks = state.tasks.filter(task => {
-    const matchesSearch = task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         task.description.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'all' || task.status === statusFilter;
     const matchesPriority = priorityFilter === 'all' || task.priority === priorityFilter;
     const matchesAssignee = assigneeFilter === 'all' || String(task.assigneeId) === assigneeFilter;
 
-    return matchesSearch && matchesStatus && matchesPriority && matchesAssignee;
+    return matchesStatus && matchesPriority && matchesAssignee;
   });
 
   // Group tasks by status
   const taskColumns = {
-    todo: filteredTasks.filter(task => task.status === 'todo'),
-    'in-progress': filteredTasks.filter(task => task.status === 'in-progress'),
+    todo: filteredTasks.filter(task => task.status === ''),
+    'in-progress': filteredTasks.filter(task => task.status === 'ongoing'),
     completed: filteredTasks.filter(task => task.status === 'completed'),
   };
 
@@ -50,7 +65,8 @@ export const TaskList: React.FC = () => {
     // Update task status based on column
     const newStatus = over.id as 'todo' | 'in-progress' | 'completed';
     if (activeTask.status !== newStatus) {
-      const updatedTask = { ...activeTask, status: newStatus };
+      const uiStatus = newStatus === 'in-progress' ? 'ongoing' : newStatus === 'completed' ? 'completed' : '';
+      const updatedTask = { ...activeTask, status: uiStatus as any };
       const updatedTasks = state.tasks.map(task =>
         task.id === activeTask.id ? updatedTask : task
       );
@@ -61,6 +77,10 @@ export const TaskList: React.FC = () => {
   const handleCreateTask = () => {
     setEditingTask(null);
     setIsModalOpen(true);
+  };
+
+  const openDetails = (task: Task) => {
+    navigate(`/tasks/${task.id}`);
   };
 
   const handleEditTask = (task: Task) => {
@@ -84,9 +104,9 @@ export const TaskList: React.FC = () => {
   const getColumnTitle = (status: string) => {
     switch (status) {
       case 'todo':
-        return 'To Do';
+        return 'Pending';
       case 'in-progress':
-        return 'In Progress';
+        return 'Ongoing';
       case 'completed':
         return 'Completed';
       default:
@@ -111,24 +131,38 @@ export const TaskList: React.FC = () => {
         </button>
       </div>
 
-      {/* Search and Filters */}
+      {/* Tabs and Filters */}
       <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
-        <div className="flex flex-col sm:flex-row gap-4">
-          <div className="flex-1">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search tasks..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
-            </div>
+        <div className="flex items-center justify-between">
+          <div className="flex items-end gap-2" role="tablist" aria-label="Task status tabs">
+            <button
+              role="tab"
+              aria-selected={activeTab==='todo'}
+              onClick={()=>setActiveTab('todo')}
+              className={`px-4 py-2 text-sm rounded-md transition ${activeTab==='todo' ? 'bg-amber-600 text-white shadow' : 'text-amber-700 hover:bg-amber-50 hover:text-amber-800'}`}
+            >
+              Pending
+            </button>
+            <button
+              role="tab"
+              aria-selected={activeTab==='in-progress'}
+              onClick={()=>setActiveTab('in-progress')}
+              className={`px-4 py-2 text-sm rounded-md transition ${activeTab==='in-progress' ? 'bg-blue-600 text-white shadow' : 'text-blue-700 hover:bg-blue-50 hover:text-blue-800'}`}
+            >
+              Ongoing
+            </button>
+            <button
+              role="tab"
+              aria-selected={activeTab==='completed'}
+              onClick={()=>setActiveTab('completed')}
+              className={`px-4 py-2 text-sm rounded-md transition ${activeTab==='completed' ? 'bg-emerald-600 text-white shadow' : 'text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800'}`}
+            >
+              Completed
+            </button>
           </div>
           <div className="flex items-center space-x-3">
             {authState.user?.role === 'admin' && (
-              <select value={assigneeFilter} onChange={(e) => setAssigneeFilter(e.target.value)} className="px-3 py-2 border rounded-lg mr-3">
+              <select value={assigneeFilter} onChange={(e) => setAssigneeFilter(e.target.value)} className="px-3 py-2 border rounded-lg">
                 <option value="all">All users</option>
                 {Array.from(new Map(state.tasks.map(t => [t.assigneeId, t.assigneeName]))).map(([id, name]) => (
                   <option key={id} value={String(id)}>{name || `User ${id}`}</option>
@@ -136,33 +170,35 @@ export const TaskList: React.FC = () => {
               </select>
             )}
             <button
-            onClick={() => setShowFilters(!showFilters)}
-            className={`inline-flex items-center px-4 py-2 rounded-lg font-medium transition-all ${
-              showFilters 
-                ? 'bg-blue-100 text-blue-700' 
-                : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
-            }`}
-          >
-            <Filter className="w-4 h-4 mr-2" />
-            Filters
-          </button>
+              onClick={() => setShowFilters(!showFilters)}
+              className={`inline-flex items-center px-4 py-2 rounded-lg font-medium transition-all ${
+                showFilters ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+              }`}
+            >
+              <Filter className="w-4 h-4 mr-2" />
+              Filters
+            </button>
           </div>
         </div>
 
         {showFilters && (
-          <TaskFilters
-            statusFilter={statusFilter}
-            priorityFilter={priorityFilter}
-            onStatusChange={setStatusFilter}
-            onPriorityChange={setPriorityFilter}
-          />
+          <div className="mt-3">
+            <TaskFilters
+              statusFilter={statusFilter}
+              priorityFilter={priorityFilter}
+              onStatusChange={setStatusFilter}
+              onPriorityChange={setPriorityFilter}
+            />
+          </div>
         )}
       </div>
 
-      {/* Task Board */}
+      {/* Task Board (single tab) */}
       <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {Object.entries(taskColumns).map(([status, tasks]) => (
+        <div className="grid grid-cols-1 gap-6">
+          {Object.entries(taskColumns)
+            .filter(([status]) => status === activeTab)
+            .map(([status, tasks]) => (
             <div key={status} className={`rounded-xl border-2 border-dashed p-4 ${getColumnColor(status)}`}>
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-semibold text-gray-900">
@@ -172,7 +208,7 @@ export const TaskList: React.FC = () => {
                   {tasks.length}
                 </span>
               </div>
-              
+
               <SortableContext items={tasks.map(task => task.id)} strategy={verticalListSortingStrategy}>
                 <div className="space-y-3">
                   {tasks.map((task) => (
@@ -180,6 +216,7 @@ export const TaskList: React.FC = () => {
                       key={task.id}
                       task={task}
                       onEdit={() => handleEditTask(task)}
+                      onOpen={() => openDetails(task)}
                       isAdmin={authState.user?.role === 'admin'}
                     />
                   ))}

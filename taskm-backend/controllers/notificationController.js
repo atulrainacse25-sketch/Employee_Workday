@@ -6,7 +6,14 @@ exports.getUserNotifications = async (req, res) => {
     const userId = req.user.id;
     const repo = AppDataSource.getRepository(Notification);
     const rows = await repo.find({ where: { userId }, order: { createdAt: 'DESC' } });
-    res.json(rows.map(r => ({ id: r.id, message: r.message, data: r.data ? JSON.parse(r.data) : null, read: r.read, createdAt: r.createdAt })));
+    const safe = rows.map(r => {
+      let parsed = null;
+      if (r.data) {
+        try { parsed = JSON.parse(r.data); } catch { parsed = null; }
+      }
+      return { id: r.id, message: r.message, data: parsed, read: r.read, createdAt: r.createdAt };
+    });
+    res.json(safe);
   } catch (err) {
     console.error('Error fetching notifications:', err);
     res.status(500).json({ message: 'Server error' });
@@ -25,6 +32,22 @@ exports.markRead = async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     console.error('Error marking notification read:', err);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+exports.markAllRead = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const repo = AppDataSource.getRepository(Notification);
+    await repo.createQueryBuilder()
+      .update()
+      .set({ read: true })
+      .where('user_id = :userId AND read = false', { userId })
+      .execute();
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error marking all notifications read:', err);
     res.status(500).json({ message: 'Server error' });
   }
 };

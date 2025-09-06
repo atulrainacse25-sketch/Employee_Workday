@@ -11,6 +11,7 @@ const REFRESH_SECRET = process.env.REFRESH_TOKEN_SECRET || process.env.JWT_SECRE
 const generateAccessToken = (user) => jwt.sign({ id: user.id, email: user.email, name: user.name, role: user.role, avatar: user.avatar }, process.env.JWT_SECRET, { expiresIn: ACCESS_EXPIRY });
 const generateRefreshToken = (user) => jwt.sign({ id: user.id }, REFRESH_SECRET, { expiresIn: REFRESH_EXPIRY });
 
+
 function setRefreshCookie(res, token) {
   const cookieOptions = {
     httpOnly: true,
@@ -51,12 +52,13 @@ exports.register = async (req, res) => {
     // generate tokens
     const accessToken = generateAccessToken(newUser);
     const refreshToken = generateRefreshToken(newUser);
+    console.log("This is token",refreshToken);
 
     // hash refresh token and store hash in DB
     const hashedRefresh = await bcrypt.hash(refreshToken, 10);
     newUser.refreshToken = hashedRefresh;
     await userRepository.save(newUser);
-
+    console.log("This is token",refreshToken);
     // set refresh token as httpOnly cookie
     setRefreshCookie(res, refreshToken);
 

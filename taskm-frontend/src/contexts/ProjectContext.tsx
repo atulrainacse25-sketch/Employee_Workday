@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import axios from 'axios';
 import { useAuth } from './useAuth';
 
@@ -47,33 +47,23 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
   const { state: authState } = useAuth();
   const [projects, setProjects] = useState<Project[]>([]);
   const [invites, setInvites] = useState<{ id:number; projectId:number }[]>([]);
-  const sampleProjects = useMemo(() => [
-    { id: 1, name: 'Fizvizz', description: 'Analytics Dashboard', start_date: '2021-01-10', end_date: '2021-03-30', status: 'Active', tasks_completed: 12, tasks_total: 20, members: [{id:1,name:'Alice'},{id:2,name:'Bob'}] },
-    { id: 2, name: 'Sprint Planning', description: 'Planning the next Sprint', start_date: '2021-05-05', end_date: '2021-05-18', status: 'On Hold', tasks_completed: 20, tasks_total: 20, members: [{id:3,name:'Carol'},{id:4,name:'Dan'}] },
-    { id: 3, name: 'Website Redesign', description: "Redesign the company's website", start_date: '2021-02-01', end_date: '2021-07-01', status: 'Completed', tasks_completed: 8, tasks_total: 15, members: [{id:2,name:'Bob'},{id:3,name:'Carol'}] },
-  ], []);
+  // Removed sample fallback to always display real data from backend
 
   const fetchMyProjects = useCallback(async () => {
     try {
       const res = await axios.get('/api/projects/me', { withCredentials: true });
       const data = res.data || [];
-      if (!data || data.length === 0) {
-        // fallback sample data for UI when backend has no projects
-        setProjects(sampleProjects);
-      } else {
-        setProjects(data);
-      }
+      setProjects(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('fetchMyProjects error', err);
     }
-  }, [sampleProjects]);
+  }, []);
 
   const fetchAllProjects = async () => {
     try {
       const res = await axios.get('/api/projects', { withCredentials: true });
       const data = res.data || [];
-      if (!data || data.length === 0) setProjects(sampleProjects);
-      else setProjects(data);
+      setProjects(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('fetchAllProjects error', err);
     }
@@ -88,7 +78,11 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
   useEffect(() => {
     if (!authState.initialized || !authState.user) return;
-    fetchMyProjects();
+    if (authState.user.role === 'admin') {
+      void fetchAllProjects();
+    } else {
+      void fetchMyProjects();
+    }
     fetchInvites();
   }, [authState.initialized, authState.user, fetchMyProjects, fetchInvites]);
 

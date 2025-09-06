@@ -26,28 +26,42 @@ export const AttendanceCalendar: React.FC = () => {
     return d === 0 || d === 6;
   };
 
-  const getStatusColor = (date: Date) => {
+  const getStatusStyles = (date: Date) => {
     const attendance = getAttendanceForDate(date);
     const holiday = getHolidayForDate(date) || (isWeekend(date) ? { name: 'Weekend', type: 'company' } : null);
 
     if (holiday) {
-      // strong purple for holidays/weekends
-      if (holiday.name === 'Weekend') return 'bg-purple-700 border-purple-800 text-white';
-      return 'bg-purple-700 border-purple-800 text-white';
+      const isWknd = holiday.name === 'Weekend';
+      return {
+        cell: 'bg-purple-50 border-purple-200 text-gray-900',
+        badge: isWknd ? 'bg-purple-200 text-purple-800' : 'bg-purple-200 text-purple-800',
+        badgeLabel: isWknd ? 'Weekend' : 'Holiday',
+      };
     }
-    if (!attendance) return 'bg-gray-50 border-gray-200 text-gray-800';
+
+    if (!attendance) return { cell: 'bg-white border-gray-200 text-gray-900', badge: '', badgeLabel: '' };
 
     switch (attendance.status) {
       case 'present':
-        return 'bg-green-600 border-green-700 text-white';
+        return { cell: 'bg-green-50 border-green-200', badge: 'bg-green-200 text-green-800', badgeLabel: 'Present' };
       case 'late':
-        return 'bg-yellow-500 border-yellow-600 text-black';
+        return { cell: 'bg-yellow-50 border-yellow-200', badge: 'bg-yellow-200 text-yellow-800', badgeLabel: 'Late' };
       case 'half-day':
-        return 'bg-indigo-600 border-indigo-700 text-white';
+        return { cell: 'bg-blue-50 border-blue-200', badge: 'bg-blue-200 text-blue-800', badgeLabel: 'Half Day' };
       case 'absent':
-        return 'bg-red-600 border-red-700 text-white';
+        return { cell: 'bg-red-50 border-red-200', badge: 'bg-red-200 text-red-800', badgeLabel: 'Absent' };
       default:
-        return 'bg-gray-50 border-gray-200 text-gray-800';
+        return { cell: 'bg-white border-gray-200', badge: '', badgeLabel: '' };
+    }
+  };
+
+  const formatTime = (t?: string | null) => {
+    if (!t) return '-';
+    try {
+      const [hh, mm] = String(t).split(':');
+      return `${hh}:${mm}`;
+    } catch {
+      return String(t);
     }
   };
 
@@ -81,26 +95,18 @@ export const AttendanceCalendar: React.FC = () => {
 
       {/* Legend */}
       <div className="flex flex-wrap gap-4 text-sm">
-        <div className="flex items-center space-x-2">
-          <div className="w-4 h-4 bg-green-100 border border-green-300 rounded"></div>
-          <span>Present</span>
-        </div>
-        <div className="flex items-center space-x-2">
-          <div className="w-4 h-4 bg-orange-100 border border-orange-300 rounded"></div>
-          <span>Late</span>
-        </div>
-        <div className="flex items-center space-x-2">
-          <div className="w-4 h-4 bg-blue-100 border border-blue-300 rounded"></div>
-          <span>Half Day</span>
-        </div>
-        <div className="flex items-center space-x-2">
-          <div className="w-4 h-4 bg-red-100 border border-red-300 rounded"></div>
-          <span>Absent</span>
-        </div>
-        <div className="flex items-center space-x-2">
-          <div className="w-4 h-4 bg-purple-100 border border-purple-300 rounded"></div>
-          <span>Holiday</span>
-        </div>
+        {[
+          ['bg-green-100 border-green-300','Present'],
+          ['bg-yellow-100 border-yellow-300','Late'],
+          ['bg-blue-100 border-blue-300','Half Day'],
+          ['bg-red-100 border-red-300','Absent'],
+          ['bg-purple-100 border-purple-300','Holiday/Weekend'],
+        ].map(([cls,label]) => (
+          <div key={label as string} className="flex items-center space-x-2">
+            <div className={`w-4 h-4 rounded border ${cls as string}`}></div>
+            <span>{label as string}</span>
+          </div>
+        ))}
       </div>
 
       {/* Calendar Grid */}
@@ -126,60 +132,37 @@ export const AttendanceCalendar: React.FC = () => {
             const attendance = getAttendanceForDate(day);
             const holiday = getHolidayForDate(day);
             const isToday = isSameDay(day, new Date());
+            const s = getStatusStyles(day);
 
             return (
               <div
                 key={day.toString()}
-                className={`relative h-32 p-2 border-2 ${getStatusColor(day)} ${isToday ? 'ring-2 ring-blue-500' : ''} overflow-hidden flex flex-col justify-between`}
+                className={`relative h-32 p-2 border ${s.cell} ${isToday ? 'ring-2 ring-blue-500' : ''} overflow-hidden flex flex-col`}
               >
-                {/* Status pill top-right */}
-                { (holiday || attendance) && (
-                  <span className={`absolute top-2 right-2 inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold shadow ${
-                    holiday && holiday.name === 'Weekend'
-                      ? 'bg-purple-800 text-white'
-                      : holiday
-                      ? 'bg-purple-700 text-white'
-                      : attendance?.status === 'present'
-                      ? 'bg-green-700 text-white'
-                      : attendance?.status === 'late'
-                      ? 'bg-orange-600 text-white'
-                      : attendance?.status === 'half-day'
-                      ? 'bg-blue-700 text-white'
-                      : attendance?.status === 'absent'
-                      ? 'bg-red-700 text-white'
-                      : 'bg-gray-700 text-white'
-                  }`}>{holiday ? (holiday.name === 'Weekend' ? 'WEEKEND' : 'HOLIDAY') : (attendance?.status || '').toUpperCase()}</span>
-                )}
-
-                <div>
-                  {/* Weekday abbreviation */}
-                  <div className="text-xs text-gray-700">{format(day, 'EEE')}</div>
-                  <span className={`block text-sm font-medium ${isToday ? 'font-bold' : ''}`}>
-                    {format(day, 'd')}
-                  </span>
-                  {/* Show weekend/holiday label under date for visibility */}
-                  { (isWeekend(day) || (getHolidayForDate(day))) && (
-                    <div className="text-[11px] font-medium mt-1 text-white/95">
-                      {getHolidayForDate(day)?.name === 'Weekend' || isWeekend(day) ? 'Weekend' : getHolidayForDate(day)?.name}
-                    </div>
+                {/* Date + badge */}
+                <div className="flex items-center justify-between">
+                  <div className="text-sm font-medium text-gray-800">{format(day, 'd')}</div>
+                  {s.badgeLabel && (
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${s.badge}`}>{s.badgeLabel}</span>
                   )}
                 </div>
 
-                <div className="flex-1 mt-1 text-[12px] space-y-1 overflow-hidden max-h-20">
+                {/* Content */}
+                <div className="mt-1 text-[12px] space-y-1 overflow-hidden">
                   {holiday && (
-                    <div className="text-white font-medium truncate opacity-95 text-sm">
-                      {holiday.name}
-                    </div>
+                    <div className="font-medium truncate text-purple-800">{holiday.name}</div>
                   )}
-                  {attendance && !holiday && (
+                  {attendance && (
                     <div className="space-y-0.5">
-                      <div className="text-[12px] mt-1 truncate"><span className="font-semibold">Check In:</span> {attendance.checkIn || '-'}</div>
-                      <div className="text-[12px] truncate"><span className="font-semibold">Check Out:</span> {attendance.checkOut || '-'}</div>
+                      <div className="truncate"><span className="font-semibold">In:</span> {formatTime(attendance.checkIn)}</div>
+                      <div className="truncate"><span className="font-semibold">Out:</span> {formatTime(attendance.checkOut)}</div>
                     </div>
                   )}
-
-                  <div className="mt-1 font-medium text-sm truncate">{attendance?.totalHours ? `${attendance.totalHours}h` : ''}</div>
                 </div>
+
+                {attendance?.totalHours && (
+                  <div className="mt-auto pt-1 text-right text-[11px] font-semibold text-gray-700">{attendance.totalHours}h</div>
+                )}
               </div>
             );
           })}
