@@ -1,165 +1,149 @@
-
-const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const bcrypt = require('bcrypt');
 const AppDataSource = require('../data-source');
 const User = require('../entities/User');
+const dotenv = require('dotenv');
+dotenv.config();
 
-const ACCESS_EXPIRY = '15m';
-const REFRESH_EXPIRY = '7d';
-const REFRESH_SECRET = process.env.REFRESH_TOKEN_SECRET || process.env.JWT_SECRET;
-
-const generateAccessToken = (user) => jwt.sign({ id: user.id, email: user.email, name: user.name, role: user.role, avatar: user.avatar }, process.env.JWT_SECRET, { expiresIn: ACCESS_EXPIRY });
-const generateRefreshToken = (user) => jwt.sign({ id: user.id }, REFRESH_SECRET, { expiresIn: REFRESH_EXPIRY });
-
-
-function setRefreshCookie(res, token) {
-  const cookieOptions = {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in ms
-  };
-  res.cookie('refreshToken', token, cookieOptions);
-}
-
+/**
+ * Register a new user
+ */
 exports.register = async (req, res) => {
-  const { name, username, email, password, role, avatar } = req.body;
-  if (!name || !email || !password) return res.status(400).json({ message: 'Name, email, and password required' });
-
-  const userRepository = AppDataSource.getRepository(User);
-
   try {
-    // check email and username uniqueness
-    const existingByEmail = await userRepository.findOneBy({ email });
-    if (existingByEmail) return res.status(409).json({ message: 'Email already exists' });
+    const { name, email, password, role } = req.body;
 
-    if (username) {
-      const existingByUsername = await userRepository.findOneBy({ username });
-      if (existingByUsername) return res.status(409).json({ message: 'Username already exists' });
+    if (!name || !email || !password) {
+      return res.status(400).json({ message: 'Missing required fields' });
+    }
+
+    const userRepo = AppDataSource.getRepository(User);
+
+    const existingUser = await userRepo.findOne({ where: { email } });
+    if (existingUser) {
+      return res.status(409).json({ message: 'Email already in use' });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const newUser = userRepository.create({
+
+    const newUser = userRepo.create({
       name,
-      username: username || null,
       email,
       password: hashedPassword,
-      role,
-      avatar,
+      role: role || 'user',
     });
-    await userRepository.save(newUser);
 
-    // generate tokens
-    const accessToken = generateAccessToken(newUser);
-    const refreshToken = generateRefreshToken(newUser);
-    console.log("This is token",refreshToken);
+    await userRepo.save(newUser);
 
-    // hash refresh token and store hash in DB
-    const hashedRefresh = await bcrypt.hash(refreshToken, 10);
-    newUser.refreshToken = hashedRefresh;
-    await userRepository.save(newUser);
-    console.log("This is token",refreshToken);
-    // set refresh token as httpOnly cookie
-    setRefreshCookie(res, refreshToken);
-
-    // In development return refresh token so frontend can fallback if cookies are blocked by SameSite policies
-    const resp = { token: accessToken, user: { id: newUser.id, email: newUser.email, name: newUser.name, username: newUser.username, role: newUser.role, avatar: newUser.avatar } };
-    if (process.env.NODE_ENV !== 'production') resp.refreshToken = refreshToken;
-    res.status(201).json(resp);
+    return res.status(201).json({
+      success: true,
+      message: 'User registered successfully',
+      user: {
+        id: newUser.id,
+        name: newUser.name,
+        email: newUser.email,
+        role: newUser.role,
+      },
+    });
   } catch (err) {
-    console.error('Error during registration:', err);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Register error:', err.stack);
+    return res.status(500).json({ message: 'Server error during registration' });
   }
 };
 
+
+/**
+ * Login user
+ */
 exports.login = async (req, res) => {
-  const { identifier, password } = req.body; // identifier can be email or username
-  if (!identifier || !password) return res.status(400).json({ message: 'Identifier and password required' });
-
-  const userRepository = AppDataSource.getRepository(User);
-
   try {
-    let user;
-    if (identifier.includes('@')) {
-      user = await userRepository.findOneBy({ email: identifier });
-    } else {
-      user = await userRepository.findOneBy({ username: identifier });
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ message: 'Email and password required' });
     }
 
-    if (!user) return res.status(401).json({ message: 'Invalid credentials' });
+    const userRepo = AppDataSource.getRepository(User);
+    const user = await userRepo.findOneBy({ email });
+    if (!user) {
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
 
-    const match = await bcrypt.compare(password, user.password);
-    if (!match) return res.status(401).json({ message: 'Invalid credentials' });
+    const validPassword = await bcrypt.compare(password, user.password);
+    if (!validPassword) {
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
 
-    const accessToken = generateAccessToken(user);
-    const refreshToken = generateRefreshToken(user);
+    const token = jwt.sign(
+      { id: user.id, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: '1h' }
+    );
 
-    // hash refresh token and store hash in DB
-    const hashedRefresh = await bcrypt.hash(refreshToken, 10);
-    user.refreshToken = hashedRefresh;
-    await userRepository.save(user);
+    const refreshToken = jwt.sign(
+      { id: user.id },
+      process.env.JWT_REFRESH_SECRET,
+      { expiresIn: '7d' }
+    );
 
-    // set refresh token as httpOnly cookie
-    setRefreshCookie(res, refreshToken);
-    const resp = { token: accessToken, user: { id: user.id, email: user.email, name: user.name, username: user.username, role: user.role, avatar: user.avatar } };
-    if (process.env.NODE_ENV !== 'production') resp.refreshToken = refreshToken;
-    res.json(resp);
+    res.json({
+      success: true,
+      token,
+      refreshToken,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role || 'user'
+      }
+    });
   } catch (err) {
-    console.error('Error during login:', err);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Login error:', err);
+    res.status(500).json({ message: 'Server error during login' });
   }
 };
 
-// Refresh token endpoint
+/**
+ * Refresh token
+ */
 exports.refresh = async (req, res) => {
-  // prefer cookie, fallback to body
-  const token = req.cookies?.refreshToken || req.body?.token;
-  if (!token) return res.status(401).json({ message: 'Refresh token required' });
-
   try {
-    const payload = jwt.verify(token, REFRESH_SECRET);
-    const userRepository = AppDataSource.getRepository(User);
-    const user = await userRepository.findOneBy({ id: payload.id });
-    if (!user) return res.status(403).json({ message: 'Invalid refresh token' });
+    const { refreshToken } = req.body;
+    if (!refreshToken) {
+      return res.status(400).json({ message: 'Refresh token required' });
+    }
 
-    // compare provided token with hashed token in DB
-    const valid = user.refreshToken ? await bcrypt.compare(token, user.refreshToken) : false;
-    if (!valid) return res.status(403).json({ message: 'Invalid refresh token' });
+    jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET, async (err, decoded) => {
+      if (err) return res.status(403).json({ message: 'Invalid refresh token' });
 
-    // rotate refresh token
-    const newRefreshToken = generateRefreshToken(user);
-    const newHashed = await bcrypt.hash(newRefreshToken, 10);
-    user.refreshToken = newHashed;
-    await userRepository.save(user);
+      const userRepo = AppDataSource.getRepository(User);
+      const user = await userRepo.findOneBy({ id: decoded.id });
+      if (!user) return res.status(404).json({ message: 'User not found' });
 
-    // set new refresh cookie
-    setRefreshCookie(res, newRefreshToken);
+      const newToken = jwt.sign(
+        { id: user.id, role: user.role },
+        process.env.JWT_SECRET,
+        { expiresIn: '1h' }
+      );
 
-    const accessToken = generateAccessToken(user);
-    res.json({ token: accessToken, user: { id: user.id, email: user.email, name: user.name, username: user.username, role: user.role, avatar: user.avatar } });
+      res.json({
+        success: true,
+        token: newToken,
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role || 'user'
+        }
+      });
+    });
   } catch (err) {
-    console.error('Error refreshing token:', err);
-    res.status(403).json({ message: 'Invalid refresh token' });
+    console.error('Refresh error:', err);
+    res.status(500).json({ message: 'Server error during token refresh' });
   }
 };
 
-// Logout endpoint
+/**
+ * Logout user
+ */
 exports.logout = async (req, res) => {
-  // prefer cookie, fallback to body
-  const token = req.cookies?.refreshToken || req.body?.token;
-  if (!token) return res.status(400).json({ message: 'Refresh token required' });
-  try {
-    const payload = jwt.verify(token, REFRESH_SECRET);
-    const userRepository = AppDataSource.getRepository(User);
-    const user = await userRepository.findOneBy({ id: payload.id });
-    if (user) {
-      user.refreshToken = null;
-      await userRepository.save(user);
-    }
-    res.clearCookie('refreshToken');
-    res.json({ message: 'Logged out' });
-  } catch (err) {
-    console.error('Error during logout:', err);
-    res.status(500).json({ message: 'Server error' });
-  }
+  res.json({ success: true, message: 'Logged out successfully' });
 };

@@ -1,71 +1,99 @@
 import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../contexts/useAuth';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  LayoutDashboard, 
-  CheckSquare, 
-  Users, 
-  Settings, 
-  BarChart3,
-  FileText,
-  Clock
+    Briefcase,
+    LayoutDashboard, 
+    CheckSquare, 
+    FolderKanban,
+    Clock,
+    UserCog,
+    BarChart3,
+    Settings,
+    LogOut
 } from 'lucide-react';
+import { ElementType, ReactNode } from 'react';
 
-interface NavItem {
-  name: string;
-  href: string;
-  icon: React.ComponentType<{ className?: string }>;
-  adminOnly?: boolean;
+interface NavItemProps {
+  to: string;
+  icon: ElementType;
+  children: ReactNode;
 }
 
-const navItems: NavItem[] = [
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'Tasks', href: '/tasks', icon: CheckSquare },
-  { name: 'Attendance', href: '/attendance', icon: Clock },
-  { name: 'Reports', href: '/reports', icon: BarChart3, adminOnly: true },
-  { name: 'Smart Planner', href: '/smart-planner', icon: Users, adminOnly: true },
-  { name: 'Projects', href: '/projects', icon: FileText },
-  { name: 'Settings', href: '/settings', icon: Settings },
-];
+const NavItem: React.FC<NavItemProps> = ({ to, icon: Icon, children }) => (
+    <NavLink
+        to={to}
+        className={({ isActive }) =>
+            `flex items-center gap-4 px-4 py-3 rounded-lg text-base font-medium transition-all duration-200 relative ${
+            isActive
+                ? 'bg-white/10 text-white'
+                : 'text-slate-400 hover:bg-white/5 hover:text-white'
+            }`
+        }
+    >
+        {({ isActive }) => (
+            <>
+                <AnimatePresence>
+                {isActive && (
+                    <motion.div
+                        layoutId="active-nav-indicator"
+                        className="absolute left-0 top-0 bottom-0 w-1 bg-indigo-400 rounded-r-full"
+                    />
+                )}
+                </AnimatePresence>
+                <Icon className="w-5 h-5" />
+                <span>{children}</span>
+            </>
+        )}
+    </NavLink>
+);
 
 export const Sidebar: React.FC = () => {
-  const location = useLocation();
-  const { state } = useAuth();
+  const { state, logout } = useAuth();
 
-  const filteredNavItems = navItems.filter(item => 
+  const navLinks = [
+    { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
+    { to: "/tasks", icon: CheckSquare, label: "My Tasks" },
+    { to: "/projects", icon: FolderKanban, label: "Projects" },
+    { to: "/attendance", icon: Clock, label: "Attendance" },
+    { to: "/smart-planner", icon: UserCog, label: "Smart Planner" },
+    { to: "/reports", icon: BarChart3, label: "Reports", adminOnly: true },
+  ];
+  
+  const filteredNavItems = navLinks.filter(item => 
     !item.adminOnly || state.user?.role === 'admin'
   );
 
   return (
-    <aside className="fixed left-0 top-16 h-[calc(100vh-4rem)] w-64 bg-white border-r border-gray-200 hidden lg:block overflow-y-auto">
-      <div className="p-6">
-        <Link to="/dashboard" className="flex items-center space-x-3 mb-8">
-          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-            <CheckSquare className="w-5 h-5 text-white" />
-          </div>
-          <span className="text-xl font-bold text-gray-900">TaskFlow</span>
-        </Link>
-
-        <nav className="space-y-2">
-          {filteredNavItems.map((item) => {
-            const isActive = location.pathname === item.href;
-            return (
-              <Link
-                key={item.name}
-                to={item.href}
-                className={`flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors ${
-                  isActive
-                    ? 'bg-blue-50 text-blue-700 border-r-2 border-blue-700'
-                    : 'text-gray-700 hover:bg-gray-50'
-                }`}
-              >
-                <item.icon className="w-5 h-5" />
-                <span className="font-medium">{item.name}</span>
-              </Link>
-            );
-          })}
+    <aside className="fixed inset-y-0 left-0 z-50 w-72 bg-slate-900/80 backdrop-blur-xl border-r border-white/20 hidden lg:flex flex-col p-6">
+        <div className="flex items-center gap-3 mb-10">
+            <div className="p-2 bg-white/10 rounded-lg"><Briefcase className="w-7 h-7 text-white" /></div>
+            <h1 className="text-xl font-bold text-white tracking-wider">Employee Workday</h1>
+        </div>
+        
+        <nav className="flex-1 flex flex-col gap-2">
+            {filteredNavItems.map(link => (
+                <NavItem key={link.to} to={link.to} icon={link.icon}>
+                    {link.label}
+                </NavItem>
+            ))}
         </nav>
-      </div>
+
+        <div className="mt-auto">
+            <div className="border-t border-white/20 pt-4">
+                <NavItem to="/settings" icon={Settings}>
+                    Settings
+                </NavItem>
+                <button 
+                    onClick={logout}
+                    className="flex items-center gap-4 px-4 py-3 rounded-lg text-base font-medium w-full text-slate-400 hover:bg-white/5 hover:text-white transition-colors"
+                >
+                    <LogOut className="w-5 h-5" />
+                    <span>Sign Out</span>
+                </button>
+            </div>
+        </div>
     </aside>
   );
 };

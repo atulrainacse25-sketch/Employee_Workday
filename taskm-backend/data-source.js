@@ -2,6 +2,7 @@ require('dotenv').config();
 const { DataSource } = require('typeorm');
 const path = require('path');
 
+// Entities
 const UserSchema = require('./entities/User');
 const TaskSchema = require('./entities/Task');
 const AttendanceSchema = require('./entities/Attendance');
@@ -19,7 +20,7 @@ const AppDataSource = new DataSource({
   username: process.env.PGUSER || 'postgres',
   password: process.env.PGPASSWORD || 'postgres',
   database: process.env.PGDATABASE || 'postgres',
-  synchronize: false, // safer for migrations
+  synchronize: false, // Use migrations instead
   logging: process.env.NODE_ENV === 'development',
   entities: [
     UserSchema,

@@ -28,7 +28,7 @@ type AuthAction =
 
 export const AuthContext = createContext<{
   state: AuthState;
-  login: (identifier: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
   register: (name: string, username: string | undefined, email: string, password: string) => Promise<void>;
   logout: () => void;
   resetPassword: (email: string) => Promise<void>;
@@ -78,13 +78,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       delete axios.defaults.headers.common['Authorization'];
     }
 
-    // Axios response interceptor to handle 401 and attempt token refresh
     const resInterceptor = axios.interceptors.response.use(
       (response) => response,
       async (error) => {
         const originalRequest = error.config as any;
         if (error.response && error.response.status === 401) {
-          // Do not try to refresh when the refresh call itself fails
           if (originalRequest?.url && String(originalRequest.url).includes('/api/refresh')) {
             dispatch({ type: 'LOGOUT' });
             return Promise.reject(error);
@@ -92,29 +90,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (!originalRequest._retry) {
             originalRequest._retry = true;
             try {
-              const refreshRes = await axios.post('/api/refresh', {}, { withCredentials: true, timeout: 5000 }); // refresh token is read from cookie by backend
+              const refreshRes = await axios.post('/api/refresh', {}, { withCredentials: true, timeout: 5000 });
               const newToken = refreshRes.data.token;
               localStorage.setItem('token', newToken);
               axios.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
               originalRequest.headers['Authorization'] = `Bearer ${newToken}`;
               return axios(originalRequest);
             } catch (refreshErr) {
-              // Try body refresh using stored refresh token (dev fallback)
-              const storedRefresh = localStorage.getItem('refreshToken');
-              if (storedRefresh) {
-                try {
-                  const r2 = await axios.post('/api/refresh', { token: storedRefresh }, { withCredentials: true, timeout: 5000 });
-                  const t2 = r2.data.token;
-                  if (t2) {
-                    localStorage.setItem('token', t2);
-                    axios.defaults.headers.common['Authorization'] = `Bearer ${t2}`;
-                    originalRequest.headers['Authorization'] = `Bearer ${t2}`;
-                    return axios(originalRequest);
-                  }
-                } catch (e) {
-                  console.debug('Interceptor fallback refresh failed:', e);
-                }
-              }
               dispatch({ type: 'LOGOUT' });
               return Promise.reject(refreshErr);
             }
@@ -129,7 +111,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, [state.token]);
 
-  // Try to restore session on mount using refresh token (HTTP-only cookie)
   useEffect(() => {
     const restoreSession = async () => {
       try {
@@ -138,86 +119,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (token && user) {
           localStorage.setItem('token', token);
           dispatch({ type: 'AUTH_SUCCESS', payload: { user, token } });
-          // fetch notifications for user and show any unread
-          const getMessage = (err: unknown): string => {
-            if (err && typeof err === 'object' && 'message' in err) {
-              const m = (err as Record<string, unknown>)['message'];
-              if (typeof m === 'string') return m;
-            }
-            return String(err);
-          };
-
-          try {
-            const notRes = await axios.get('/api/notifications', { withCredentials: true, timeout: 5000 });
-            const notifs = notRes.data || [];
-            for (const n of notifs) {
-              if (!n.read) {
-                // simple popup notification
-                try { window.alert(n.message); } catch { console.log('Notification:', n.message); }
-                // mark read
-                try { await axios.post(`/api/notifications/${n.id}/read`, {}, { withCredentials: true, timeout: 5000 }); } catch { console.debug('Failed to mark notification read'); }
-              }
-            }
-          } catch (err: unknown) {
-            console.debug('Could not fetch notifications:', getMessage(err));
-          }
         }
-      } catch (err: unknown) {
-        // Try fallback: if we have a refreshToken stored in localStorage (dev), send it in body
-        const storedRefresh = localStorage.getItem('refreshToken');
-        if (storedRefresh) {
-          try {
-            const res2 = await axios.post('/api/refresh', { token: storedRefresh }, { withCredentials: true, timeout: 5000 });
-            const { token: t2, user: u2, refreshToken: newRefresh } = res2.data;
-            if (t2 && u2) {
-              localStorage.setItem('token', t2);
-              if (newRefresh) localStorage.setItem('refreshToken', newRefresh);
-              dispatch({ type: 'AUTH_SUCCESS', payload: { user: u2, token: t2 } });
-              return;
-            }
-          } catch (e) {
-            console.debug('Fallback refresh failed:', e);
-          }
-        }
-        console.debug('No session restore:', err);
+      } catch {
         dispatch({ type: 'LOGOUT' });
       }
     };
     restoreSession();
-    // run only once on mount
   }, []);
 
-  const login = async (identifier: string, password: string) => {
+  const login = async (email: string, password: string) => {
     dispatch({ type: 'AUTH_START' });
     try {
-      const res = await axios.post('/api/login', { identifier, password }, { withCredentials: true });
+      const res = await axios.post('/api/login', { email, password }, { withCredentials: true });
       const { token, user, refreshToken } = res.data;
       localStorage.setItem('token', token);
       if (refreshToken) {
         localStorage.setItem('refreshToken', refreshToken);
-        try { console.log('Refresh token:', refreshToken); } catch {}
       }
       dispatch({ type: 'AUTH_SUCCESS', payload: { user, token } });
-      // fetch notifications after login
-      try {
-        const notRes = await axios.get('/api/notifications', { withCredentials: true, timeout: 5000 });
-        const notifs = notRes.data || [];
-        for (const n of notifs) {
-          if (!n.read) {
-            try { window.alert(n.message); } catch { console.log('Notification:', n.message); }
-            try { await axios.post(`/api/notifications/${n.id}/read`, {}, { withCredentials: true, timeout: 5000 }); } catch { console.debug('Failed to mark notification read'); }
-          }
-        }
-      } catch (err: unknown) {
-        const getMessage = (err: unknown): string => {
-          if (err && typeof err === 'object' && 'message' in err) {
-            const m = (err as Record<string, unknown>)['message'];
-            if (typeof m === 'string') return m;
-          }
-          return String(err);
-        };
-        console.debug('Could not fetch notifications after login:', getMessage(err));
-      }
     } catch (error) {
       if (axios.isAxiosError(error)) {
         dispatch({ type: 'AUTH_ERROR', payload: error.response?.data?.message || 'Login failed' });
@@ -230,13 +149,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const register = async (name: string, username: string | undefined, email: string, password: string): Promise<void> => {
     dispatch({ type: 'AUTH_START' });
     try {
-      const res = await axios.post('/api/register', { name, username, email, password }, { withCredentials: true });
-      const rt = (res && res.data) ? (res.data as any).refreshToken : undefined;
-      if (rt) {
-        localStorage.setItem('refreshToken', rt);
-        try { console.log('Refresh token:', rt); } catch {}
-      }
-      // Registration successful - show success state
+      await axios.post('/api/register', { name, username, email, password }, { withCredentials: true });
       dispatch({ type: 'REGISTER_SUCCESS' });
     } catch (error) {
       if (axios.isAxiosError(error)) {
@@ -250,9 +163,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = async () => {
     try {
       await axios.post('/api/logout', {}, { withCredentials: true });
-    } catch (err: unknown) {
-      console.debug('Logout error ignored:', (err && typeof err === 'object' && 'message' in err) ? (err as Record<string, unknown>)['message'] : String(err));
-    }
+    } catch {}
     localStorage.removeItem('token');
     delete axios.defaults.headers.common['Authorization'];
     dispatch({ type: 'LOGOUT' });
@@ -261,9 +172,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const resetPassword = async () => {
     dispatch({ type: 'AUTH_START' });
     try {
-      // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 1000));
-      // Just clear loading state for demo
       dispatch({ type: 'CLEAR_ERROR' });
     } catch {
       dispatch({ type: 'AUTH_ERROR', payload: 'Password reset failed' });
@@ -276,4 +185,3 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     </AuthContext.Provider>
   );
 };
-
