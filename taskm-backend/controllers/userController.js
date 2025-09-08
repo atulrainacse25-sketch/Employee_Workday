@@ -1,6 +1,6 @@
 const AppDataSource = require('../data-source');
 const User = require('../entities/User');
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 
 exports.listUsers = async (req, res) => {
   try {
