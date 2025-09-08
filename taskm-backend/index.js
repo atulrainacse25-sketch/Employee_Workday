@@ -21,20 +21,12 @@ const aiRoutes = require('./routes/ai');
 const app = express();
 const port = process.env.PORT || 5000;
 
-// Frontend URLs (local + Vercel)
-const allowedOrigins = [
-  'http://localhost:5173',
-  'https://taskm-project.vercel.app'
-];
+// Frontend URL from environment
+const clientUrl = process.env.FRONTEND_ORIGIN || 'http://localhost:5173';
 
+// CORS setup
 app.use(cors({
-  origin: function(origin, callback) {
-    if (!origin) return callback(null, true); // allow server-to-server requests
-    if (allowedOrigins.indexOf(origin) === -1) {
-      return callback(new Error('CORS policy does not allow this origin'), false);
-    }
-    return callback(null, true);
-  },
+  origin: clientUrl, // allow local dev or deployed frontend
   credentials: true
 }));
 
@@ -84,7 +76,7 @@ app.get('/', (req, res) => {
 
 // Start server
 initializeTypeORM().then(() => {
-  const server = app.listen(port, () => {
+  app.listen(port, () => {
     console.log(`Server running on port ${port}`);
   });
 
