@@ -2,7 +2,6 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const cookieParser = require('cookie-parser');
-const axios = require('axios');
 
 const AppDataSource = require('./data-source');
 const startRetentionJob = require('./scripts/retentionJob');
@@ -17,17 +16,32 @@ const reportRoutes = require('./routes/report');
 const projectRoutes = require('./routes/projects');
 const userRoutes = require('./routes/users');
 const settingsRoutes = require('./routes/settings');
-const aiRoutes = require('./routes/ai'); // NEW AI ROUTES
+const aiRoutes = require('./routes/ai');
 
 const app = express();
 const port = process.env.PORT || 5000;
 
-const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
-app.use(cors({ origin: clientUrl, credentials: true }));
+// Frontend URLs (local + Vercel)
+const allowedOrigins = [
+  'http://localhost:5173',
+  'https://taskm-project.vercel.app'
+];
+
+app.use(cors({
+  origin: function(origin, callback) {
+    if (!origin) return callback(null, true); // allow server-to-server requests
+    if (allowedOrigins.indexOf(origin) === -1) {
+      return callback(new Error('CORS policy does not allow this origin'), false);
+    }
+    return callback(null, true);
+  },
+  credentials: true
+}));
+
 app.use(express.json());
 app.use(cookieParser());
 
-// Database initialization
+// Initialize database
 async function initializeTypeORM() {
   try {
     await AppDataSource.initialize();
@@ -35,7 +49,7 @@ async function initializeTypeORM() {
     await AppDataSource.runMigrations();
     console.log('Migrations applied.');
 
-    // Ensure optional columns
+    // Ensure optional columns exist
     await AppDataSource.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS username VARCHAR(100) UNIQUE`);
     await AppDataSource.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS refresh_token TEXT`);
     await AppDataSource.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS project_id INTEGER`);
@@ -61,7 +75,7 @@ app.use('/api/reports', reportRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/settings', settingsRoutes);
-app.use('/api/ai', aiRoutes); // <-- Smart Planner AI
+app.use('/api/ai', aiRoutes);
 
 // Health check
 app.get('/', (req, res) => {
