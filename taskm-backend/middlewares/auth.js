@@ -1,7 +1,7 @@
 const jwt = require('jsonwebtoken');
 const AppDataSource = require('../data-source');
 const User = require('../entities/User');
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 
 const REFRESH_SECRET = process.env.REFRESH_TOKEN_SECRET || process.env.JWT_SECRET;
 
