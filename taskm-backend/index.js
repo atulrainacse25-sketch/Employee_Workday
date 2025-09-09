@@ -21,12 +21,23 @@ const aiRoutes = require('./routes/ai');
 const app = express();
 const port = process.env.PORT || 5000;
 
-// Frontend URL from environment
-const clientUrl = process.env.FRONTEND_ORIGIN || 'http://localhost:5173';
+// Allowed frontend URLs (local + production)
+const allowedOrigins = [
+  'http://localhost:5173', // Local development
+  'https://taskm3-frontend.vercel.app', // Production (your Vercel frontend)
+];
 
 // CORS setup
 app.use(cors({
-  origin: clientUrl, // allow local dev or deployed frontend
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true); // allow server-to-server or Postman requests
+
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error(`CORS policy does not allow access from origin: ${origin}`));
+    }
+  },
   credentials: true
 }));
 

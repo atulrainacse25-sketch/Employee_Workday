@@ -1,6 +1,7 @@
 import axios from 'axios';
 
-const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000/api';
+// Vite automatically reads from .env or .env.production based on the mode
+const backendUrl = import.meta.env.VITE_BACKEND_URL;
 
 const api = axios.create({
   baseURL: backendUrl,
