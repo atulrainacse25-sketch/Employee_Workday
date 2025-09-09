@@ -32,6 +32,7 @@ app.use(cors({
 app.use(express.json());
 app.use(cookieParser());
 
+// Database initialization
 async function initializeTypeORM() {
   try {
     await AppDataSource.initialize();
@@ -54,6 +55,17 @@ async function initializeTypeORM() {
   }
 }
 
+// Health check
+app.get('/', (req, res) => {
+  res.send('Task Manager Backend is running');
+});
+
+// Optional: make /api root return a message
+app.get('/api', (req, res) => {
+  res.send('API is running');
+});
+
+// Register routes
 app.use('/api', authRoutes);
 app.use('/api/tasks', taskRoutes);
 app.use('/api/attendance', attendanceRoutes);
@@ -65,10 +77,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/ai', aiRoutes);
 
-app.get('/', (req, res) => {
-  res.send('Task Manager Backend is running');
-});
-
+// Start server
 initializeTypeORM().then(() => {
   app.listen(port, () => {
     console.log(`Server running on port ${port}`);
