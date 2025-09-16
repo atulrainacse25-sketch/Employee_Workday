@@ -3,7 +3,8 @@ import { useForm } from 'react-hook-form';
 import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/useAuth';
 import { motion, useMotionValue, useTransform, useSpring, AnimatePresence } from 'framer-motion';
-import { Eye, EyeOff, UserPlus, Mail, Lock, User, Briefcase, CheckCircle } from 'lucide-react';
+import { Eye, EyeOff, UserPlus, Mail, Lock, User, CheckCircle } from 'lucide-react';
+import Logo from '../layout/Logo';
 
 interface RegisterForm {
   name: string;
@@ -54,10 +55,9 @@ const RegisterVisual: React.FC = () => (
                 transition={{ duration: 0.6, ease: "easeOut" }}
                 className="flex items-center gap-3 mb-12"
             >
-                <div className="p-2 bg-white/10 rounded-lg backdrop-blur-sm">
-                    <Briefcase className="w-7 h-7 text-white" />
+                <div className="p-0">
+                    <Logo size={28} compact={false} text="Workday Suite" />
                 </div>
-                <h1 className="text-2xl font-bold text-white tracking-wider">Employee Workday</h1>
             </motion.div>
 
             <motion.h2 
@@ -106,14 +106,14 @@ export const Register: React.FC = () => {
     };
     const handleMouseLeave = () => { x.set(0); y.set(0); };
 
-    if (state.user) return <Navigate to="/dashboard" replace />;
-    const onSubmit = async (data: RegisterForm) => await registerUser(data.name, data.username, data.email, data.password);
-
     React.useEffect(() => {
         if (state.registrationSuccess) {
             reset();
         }
     }, [state.registrationSuccess, reset]);
+
+    if (state.user) return <Navigate to="/dashboard" replace />;
+    const onSubmit = async (data: RegisterForm) => await registerUser(data.name, data.username, data.email, data.password);
 
     const password = watch('password');
 

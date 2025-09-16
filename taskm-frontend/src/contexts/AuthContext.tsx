@@ -72,8 +72,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   });
 
   useEffect(() => {
-    if (state.token) {
-      axios.defaults.headers.common['Authorization'] = `Bearer ${state.token}`;
+    // Ensure axios Authorization header follows the token stored in state or localStorage
+    const storedToken = state.token || localStorage.getItem('token');
+    if (storedToken) {
+      axios.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
     } else {
       delete axios.defaults.headers.common['Authorization'];
     }
@@ -90,7 +92,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (!originalRequest._retry) {
             originalRequest._retry = true;
             try {
-              const refreshRes = await axios.post('/api/refresh', {}, { withCredentials: true, timeout: 5000 });
+              // include refreshToken from localStorage in the body so backend can verify and return a new token
+              const refreshToken = localStorage.getItem('refreshToken') || undefined;
+              const refreshRes = await axios.post('/api/refresh', { refreshToken }, { withCredentials: true, timeout: 5000 });
               const newToken = refreshRes.data.token;
               localStorage.setItem('token', newToken);
               axios.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
@@ -114,13 +118,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const restoreSession = async () => {
       try {
-        const res = await axios.post('/api/refresh', {}, { withCredentials: true, timeout: 5000 });
+        const refreshToken = localStorage.getItem('refreshToken') || undefined;
+        const res = await axios.post('/api/refresh', { refreshToken }, { withCredentials: true, timeout: 5000 });
         const { token, user } = res.data;
         if (token && user) {
           localStorage.setItem('token', token);
           dispatch({ type: 'AUTH_SUCCESS', payload: { user, token } });
         }
       } catch {
+        // leave any existing token alone? clear out to be safe
         dispatch({ type: 'LOGOUT' });
       }
     };

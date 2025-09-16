@@ -2,8 +2,8 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../../contexts/useAuth';
 import { motion, AnimatePresence } from 'framer-motion';
+import Logo from './Logo';
 import { 
-    Briefcase,
     LayoutDashboard, 
     CheckSquare, 
     FolderKanban,
@@ -68,8 +68,7 @@ export const Sidebar: React.FC = () => {
   return (
     <aside className="fixed inset-y-0 left-0 z-50 w-72 bg-slate-900/80 backdrop-blur-xl border-r border-white/20 hidden lg:flex flex-col p-6">
         <div className="flex items-center gap-3 mb-10">
-            <div className="p-2 bg-white/10 rounded-lg"><Briefcase className="w-7 h-7 text-white" /></div>
-            <h1 className="text-xl font-bold text-white tracking-wider">Employee Workday</h1>
+            <Logo size={28} text="Workday Suite" />
         </div>
         
         <nav className="flex-1 flex flex-col gap-2">

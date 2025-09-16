@@ -3,7 +3,8 @@ import { useForm } from 'react-hook-form';
 import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/useAuth';
 import { motion, useMotionValue, useTransform, useSpring } from 'framer-motion';
-import { Eye, EyeOff, LogIn, Mail, Lock, Briefcase, BarChart2, CheckSquare } from 'lucide-react';
+import { Eye, EyeOff, LogIn, Mail, Lock, CheckSquare } from 'lucide-react';
+import Logo from '../layout/Logo';
 
 interface LoginForm {
   email: string;
@@ -51,10 +52,9 @@ const LoginVisual: React.FC = () => (
                 transition={{ duration: 0.6, ease: "easeOut" }}
                 className="flex items-center gap-3 mb-12"
             >
-                <div className="p-2 bg-white/10 rounded-lg backdrop-blur-sm">
-                    <Briefcase className="w-7 h-7 text-white" />
+                <div className="p-0">
+                    <Logo size={28} compact={false} text="Workday Suite" />
                 </div>
-                <h1 className="text-2xl font-bold text-white tracking-wider">Employee Workday</h1>
             </motion.div>
 
             <motion.h2 
