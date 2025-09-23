@@ -21,52 +21,63 @@ const isProduction = process.env.NODE_ENV === 'production';
 let dbConfig = {};
 
 if (isProduction && process.env.DATABASE_URL) {
-  const params = url.parse(process.env.DATABASE_URL);
-  const [username, password] = params.auth.split(':');
+    const params = url.parse(process.env.DATABASE_URL);
+    const [username, password] = params.auth.split(':');
 
-  dbConfig = {
-    type: 'postgres',
-    host: params.hostname,
-    port: parseInt(params.port, 10),
-    username,
-    password,
-    database: params.path.split('/')[1],
-    synchronize: false, // use migrations in production
-    logging: false,
-    ssl: {
-      rejectUnauthorized: false, // required for Render Postgres
-    },
-  };
+    dbConfig = {
+        type: 'postgres',
+        host: params.hostname,
+        port: parseInt(params.port, 10),
+        // Add connection pool settings
+        extra: {
+            max: 20,
+            connectionTimeoutMillis: 10000,
+            idleTimeoutMillis: 30000,
+            poolSize: 20
+        },
+        // Add SSL requirement for production
+        ssl: {
+            rejectUnauthorized: false
+        },
+        username,
+        password,
+        database: params.path.split('/')[1],
+        synchronize: false, // use migrations in production
+        logging: false,
+        ssl: {
+            rejectUnauthorized: false, // required for Render Postgres
+        },
+    };
 } else {
-  // Development config (local Postgres or SQLite)
-  dbConfig = {
-    type: process.env.DB_TYPE || 'postgres',
-    host: process.env.PGHOST || 'localhost',
-    port: process.env.PGPORT ? parseInt(process.env.PGPORT, 10) : 5433,
-    username: process.env.PGUSER || 'postgres',
-    password: process.env.PGPASSWORD || 'postgres',
-    database: process.env.PGDATABASE || 'postgres',
-    synchronize: true,
-    logging: true,
-  };
+    // Development config (local Postgres or SQLite)
+    dbConfig = {
+        type: process.env.DB_TYPE || 'postgres',
+        host: process.env.PGHOST || 'localhost',
+        port: process.env.PGPORT ? parseInt(process.env.PGPORT, 10) : 5433,
+        username: process.env.PGUSER || 'postgres',
+        password: process.env.PGPASSWORD || 'postgres',
+        database: process.env.PGDATABASE || 'postgres',
+        synchronize: true,
+        logging: true,
+    };
 }
 
 // Create DataSource
 const AppDataSource = new DataSource({
-  ...dbConfig,
-  entities: [
-    UserSchema,
-    TaskSchema,
-    AttendanceSchema,
-    LeaveSchema,
-    HolidaySchema,
-    ProjectSchema,
-    ProjectMemberSchema,
-    WFHSchema,
-    NotificationSchema,
-  ],
-  migrations: [path.join(__dirname, 'migrations/*.{ts,js}')],
-  subscribers: [],
+    ...dbConfig,
+    entities: [
+        UserSchema,
+        TaskSchema,
+        AttendanceSchema,
+        LeaveSchema,
+        HolidaySchema,
+        ProjectSchema,
+        ProjectMemberSchema,
+        WFHSchema,
+        NotificationSchema,
+    ],
+    migrations: [path.join(__dirname, 'migrations/*.{ts,js}')],
+    subscribers: [],
 });
 
 module.exports = AppDataSource;

@@ -115,11 +115,38 @@ if (process.env.NODE_ENV === 'production') {
     });
 }
 
-// Start server
-initializeTypeORM().then(() => {
-    app.listen(port, () => {
+// Function to attempt database connection with retries
+async function connectWithRetry(maxRetries = 5, delay = 5000) {
+    for (let i = 0; i < maxRetries; i++) {
+        try {
+            await initializeTypeORM();
+            console.log('Database connection established successfully');
+            return true;
+        } catch (error) {
+            console.error(`Database connection attempt ${i + 1} failed:`, error.message);
+            if (i < maxRetries - 1) {
+                console.log(`Retrying in ${delay/1000} seconds...`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+            }
+        }
+    }
+    return false;
+}
+
+// Start server with connection retry logic
+connectWithRetry().then((connected) => {
+    if (!connected) {
+        console.error('Failed to connect to database after multiple attempts');
+        process.exit(1);
+    }
+
+    const server = app.listen(port, () => {
         console.log(`Server running on port ${port}`);
     });
+
+    // Add server timeout settings
+    server.keepAliveTimeout = 65000; // Slightly higher than the ALB idle timeout
+    server.headersTimeout = 66000; // Slightly higher than keepAliveTimeout
 
     if (process.env.ENABLE_RETENTION_JOB === 'true') {
         const schedule = process.env.RETENTION_SCHEDULE || '0 3 * * *';
@@ -128,4 +155,13 @@ initializeTypeORM().then(() => {
         startRetentionJob(serverUrl, { schedule, days });
         console.log('Retention job scheduled:', schedule);
     }
+
+    // Graceful shutdown
+    process.on('SIGTERM', () => {
+        console.log('Received SIGTERM. Performing graceful shutdown...');
+        server.close(() => {
+            console.log('Server closed. Shutting down...');
+            process.exit(0);
+        });
+    });
 });
