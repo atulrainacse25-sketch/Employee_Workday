@@ -25,27 +25,31 @@ const allowedOrigin = process.env.FRONTEND_ORIGIN;
 
 // CORS configuration
 app.use(cors({
-    origin: function(origin, callback) {
-        // Allow requests with no origin (like mobile apps or curl requests)
-        if (!origin) return callback(null, true);
-
-        const allowedOrigins = [
-            process.env.FRONTEND_ORIGIN,
-            'http://localhost:5173', // Local development
-            'http://localhost:4173' // Local preview
-        ].filter(Boolean); // Remove undefined/null values
-
-        if (allowedOrigins.indexOf(origin) !== -1 || !origin) {
-            callback(null, true);
-        } else {
-            callback(new Error('Not allowed by CORS'));
-        }
-    },
+    origin: '*', // Temporarily allow all origins for debugging
     credentials: true
 }));
 
+// Add error handling middleware
+app.use((err, req, res, next) => {
+    console.error('Error occurred:', err);
+    res.status(500).json({
+        error: 'Internal Server Error',
+        message: err.message,
+        stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+    });
+});
+
 app.use(express.json());
 app.use(cookieParser());
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+    res.json({
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        database: AppDataSource.isInitialized ? 'connected' : 'disconnected'
+    });
+});
 
 // Database initialization
 async function initializeTypeORM() {

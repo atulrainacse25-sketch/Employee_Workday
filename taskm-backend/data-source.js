@@ -21,31 +21,31 @@ const isProduction = process.env.NODE_ENV === 'production';
 let dbConfig = {};
 
 if (isProduction && process.env.DATABASE_URL) {
-    const params = url.parse(process.env.DATABASE_URL);
-    const [username, password] = params.auth.split(':');
-
     dbConfig = {
         type: 'postgres',
-        host: params.hostname,
-        port: parseInt(params.port, 10),
-        // Add connection pool settings
+        url: process.env.DATABASE_URL,
+        synchronize: false,
+        logging: true, // Enable logging temporarily for debugging
+        entities: [
+            UserSchema,
+            TaskSchema,
+            AttendanceSchema,
+            LeaveSchema,
+            HolidaySchema,
+            ProjectSchema,
+            WFHSchema,
+            NotificationSchema,
+            ProjectMemberSchema
+        ],
+        migrations: [path.join(__dirname, './migrations/*.js')],
         extra: {
             max: 20,
             connectionTimeoutMillis: 10000,
             idleTimeoutMillis: 30000,
             poolSize: 20
         },
-        // Add SSL requirement for production
         ssl: {
             rejectUnauthorized: false
-        },
-        username,
-        password,
-        database: params.path.split('/')[1],
-        synchronize: false, // use migrations in production
-        logging: false,
-        ssl: {
-            rejectUnauthorized: false, // required for Render Postgres
         },
     };
 } else {
