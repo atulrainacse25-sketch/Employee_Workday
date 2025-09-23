@@ -23,10 +23,25 @@ const port = process.env.PORT || 5000;
 // Allowed frontend origin from env
 const allowedOrigin = process.env.FRONTEND_ORIGIN;
 
-// CORS
+// CORS configuration
 app.use(cors({
-  origin: allowedOrigin,
-  credentials: true
+    origin: function(origin, callback) {
+        // Allow requests with no origin (like mobile apps or curl requests)
+        if (!origin) return callback(null, true);
+
+        const allowedOrigins = [
+            process.env.FRONTEND_ORIGIN,
+            'http://localhost:5173', // Local development
+            'http://localhost:4173' // Local preview
+        ].filter(Boolean); // Remove undefined/null values
+
+        if (allowedOrigins.indexOf(origin) !== -1 || !origin) {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    credentials: true
 }));
 
 app.use(express.json());
@@ -34,35 +49,35 @@ app.use(cookieParser());
 
 // Database initialization
 async function initializeTypeORM() {
-  try {
-    await AppDataSource.initialize();
-    console.log('Database initialized.');
-    await AppDataSource.runMigrations();
+    try {
+        await AppDataSource.initialize();
+        console.log('Database initialized.');
+        await AppDataSource.runMigrations();
 
-    // Optional columns
-    await AppDataSource.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS username VARCHAR(100) UNIQUE`);
-    await AppDataSource.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS refresh_token TEXT`);
-    await AppDataSource.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS project_id INTEGER`);
-    await AppDataSource.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS estimated_minutes INTEGER`);
-    await AppDataSource.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS actual_minutes INTEGER`);
-    await AppDataSource.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS substituted_minutes INTEGER`);
-    await AppDataSource.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS actual_started_at TIMESTAMP`);
+        // Optional columns
+        await AppDataSource.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS username VARCHAR(100) UNIQUE`);
+        await AppDataSource.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS refresh_token TEXT`);
+        await AppDataSource.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS project_id INTEGER`);
+        await AppDataSource.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS estimated_minutes INTEGER`);
+        await AppDataSource.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS actual_minutes INTEGER`);
+        await AppDataSource.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS substituted_minutes INTEGER`);
+        await AppDataSource.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS actual_started_at TIMESTAMP`);
 
-    console.log('Optional columns ensured.');
-  } catch (err) {
-    console.error('Database initialization failed:', err.message);
-    process.exit(1);
-  }
+        console.log('Optional columns ensured.');
+    } catch (err) {
+        console.error('Database initialization failed:', err.message);
+        process.exit(1);
+    }
 }
 
 // Health check
 app.get('/', (req, res) => {
-  res.send('Task Manager Backend is running');
+    res.send('Task Manager Backend is running');
 });
 
 // Optional: make /api root return a message
 app.get('/api', (req, res) => {
-  res.send('API is running');
+    res.send('API is running');
 });
 
 // Register routes
@@ -77,17 +92,40 @@ app.use('/api/users', userRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/ai', aiRoutes);
 
+// Error handling middleware
+app.use((err, req, res, next) => {
+    console.error(err.stack);
+    res.status(500).json({ message: 'Something broke!', error: process.env.NODE_ENV === 'development' ? err.message : undefined });
+});
+
+// Handle 404 for API routes
+app.use('/api/*', (req, res) => {
+    res.status(404).json({ message: 'API endpoint not found' });
+});
+
+// Serve static files in production
+if (process.env.NODE_ENV === 'production') {
+    const path = require('path');
+    // Serve frontend static files
+    app.use(express.static(path.join(__dirname, '../taskm-frontend/dist')));
+
+    // Handle all other routes - return index.html for client-side routing
+    app.get('*', (req, res) => {
+        res.sendFile(path.join(__dirname, '../taskm-frontend/dist/index.html'));
+    });
+}
+
 // Start server
 initializeTypeORM().then(() => {
-  app.listen(port, () => {
-    console.log(`Server running on port ${port}`);
-  });
+    app.listen(port, () => {
+        console.log(`Server running on port ${port}`);
+    });
 
-  if (process.env.ENABLE_RETENTION_JOB === 'true') {
-    const schedule = process.env.RETENTION_SCHEDULE || '0 3 * * *';
-    const days = parseInt(process.env.RETENTION_DAYS, 10) || 90;
-    const serverUrl = process.env.SERVER_URL || `http://localhost:${port}`;
-    startRetentionJob(serverUrl, { schedule, days });
-    console.log('Retention job scheduled:', schedule);
-  }
+    if (process.env.ENABLE_RETENTION_JOB === 'true') {
+        const schedule = process.env.RETENTION_SCHEDULE || '0 3 * * *';
+        const days = parseInt(process.env.RETENTION_DAYS, 10) || 90;
+        const serverUrl = process.env.SERVER_URL || `http://localhost:${port}`;
+        startRetentionJob(serverUrl, { schedule, days });
+        console.log('Retention job scheduled:', schedule);
+    }
 });

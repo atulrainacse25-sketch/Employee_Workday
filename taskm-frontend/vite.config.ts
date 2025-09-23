@@ -9,8 +9,12 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      // Use VITE_BACKEND_URL in dev to proxy API requests to backend
       '/api': process.env.VITE_BACKEND_URL || 'http://localhost:5000',
     },
   },
+  build: {
+    outDir: 'dist',
+    sourcemap: false,
+  },
+  base: process.env.VITE_BASE_URL || '/',
 });
