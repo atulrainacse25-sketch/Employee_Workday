@@ -5,9 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:fast": "vite --force",
+    "dev:clear": "rm -rf node_modules/.vite && npm run dev",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "clean": "rm -rf node_modules/.vite dist"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
